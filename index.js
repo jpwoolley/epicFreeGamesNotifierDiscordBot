@@ -1,8 +1,7 @@
 // Require the necessary discord.js classes
-const { Client, Collection, EmbedBuilder, Events, GatewayIntentBits } = require('discord.js');
-const { token } = require('./config.json');
-const fs = require('node:fs');
-const path = require('node:path');
+const { Client, EmbedBuilder, Events, GatewayIntentBits } = require('discord.js');
+const { token, guildId, channelId } = require('./config.json');
+const cron = require('cron');
 
 
 // Create a new client instance
@@ -17,37 +16,48 @@ client.once(Events.ClientReady, c => {
 // Log in to Discord with your client's token
 client.login(token);
 
-// Commands
-client.commands = new Collection();
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+let scheduledMessage = new cron.CronJob('00 5 16 * * 4', () => {
 
-for (const file of commandFiles) {
-	const filePath = path.join(commandsPath, file);
-	const command = require(filePath);
-	// Set a new item in the Collection with the key as the command name and the value as the exported module
-	if ('data' in command && 'execute' in command) {
-		client.commands.set(command.data.name, command);
-	} else {
-		console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
-	}
-}
+	const guild = client.guilds.cache.get(guildId);
+	const channel = guild.channels.cache.get(channelId);
 
-// Event listener
-client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
+	fetch('https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?country=GB')
+	.then(response => response.json())
+	.then(data => {
+		// Work out which games are the current offers
+		let currentFreeGames = [];
+		let game;
+		let gameData = data.data.Catalog.searchStore.elements;
+		for (let i in gameData) {
+			if ((gameData[i].promotions?.promotionalOffers.length > 0) && (gameData[i].offerType === "BASE_GAME")) {
+				game = {};
+				game.storeURL = `https://store.epicgames.com/en-US/p/${gameData[i].catalogNs.mappings[0].pageSlug}`
+				game.title = gameData[i].title
+				game.description = gameData[i].description
+				game.thumbnailURL = (gameData[i].keyImages.find(x => x.type === 'Thumbnail')).url
+				game.seller = gameData[i].seller.name
+				currentFreeGames.push(game)
+			}
+		}
+		// create embeds for chat message
+		let embeds = [];
+		let currentEmbed;
+		for (let game in currentFreeGames) {
+			currentEmbed = new EmbedBuilder()
+				.setColor(0x0099FF)
+				.setURL(currentFreeGames[game].storeURL)
+				.setTitle(`'${currentFreeGames[game].title}' by ${currentFreeGames[game].seller}`)
+				.setDescription(currentFreeGames[game].description)
+				.setImage(currentFreeGames[game].thumbnailURL);
 
-	const command = interaction.client.commands.get(interaction.commandName);
+			embeds.push(currentEmbed);
+		}
+		// post message in channel
+		channel.send({
+			content: `Looks like it\'s time for more free Epic Games! Let\' see what we\'ve got in here...*rummages around*`,
+			embeds: embeds
+		})
+	})
 
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
-	}
-
-	try {
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
-	}
 });
+scheduledMessage.start();
