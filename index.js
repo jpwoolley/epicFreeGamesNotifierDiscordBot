@@ -2,19 +2,21 @@
 const { Client, EmbedBuilder, Events, GatewayIntentBits } = require('discord.js');
 const { token, guildId, channelId } = require('./config.json');
 const cron = require('cron');
+const announcements = require('./announcements.json')
 
 // Create a new client instance
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// We use 'c' for the event parameter to keep it separate from the already defined 'client'
+// Announce when the client is ready
 client.once(Events.ClientReady, c => {
 	console.log(`Ready! Logged in as ${c.user.tag}`);
 });
 
-// Log in to Discord with your client's token
+// Log in to Discord client's token
 client.login(token);
 
-let scheduledMessage = new cron.CronJob('00 5 16 * * 4', () => {
+// Schedule job
+let scheduledMessage = new cron.CronJob('00 * * * * *', () => {
 
 	const guild = client.guilds.cache.get(guildId);
 	const channel = guild.channels.cache.get(channelId);
@@ -23,20 +25,22 @@ let scheduledMessage = new cron.CronJob('00 5 16 * * 4', () => {
 	.then(response => response.json())
 	.then(data => {
 		// Work out which games are the current offers
+		let weeklyFreeGames = data.data.Catalog.searchStore.elements.filter(x => x.offerType === "BASE_GAME").filter(x => x.price.totalPrice.discountPrice == 0);
+
+		// Take the interesting bits
 		let currentFreeGames = [];
-		let game;
-		let gameData = data.data.Catalog.searchStore.elements;
-		for (let i in gameData) {
-			if ((gameData[i].promotions?.promotionalOffers.length > 0) && (gameData[i].offerType === "BASE_GAME")) {
-				game = {};
-				game.storeURL = `https://store.epicgames.com/en-US/p/${gameData[i].catalogNs.mappings[0].pageSlug}`
-				game.title = gameData[i].title
-				game.description = gameData[i].description
-				game.thumbnailURL = (gameData[i].keyImages.find(x => x.type === 'Thumbnail')).url
-				game.seller = gameData[i].seller.name
+		let game = {};
+		for (let i in weeklyFreeGames) {
+				game.storeURL = `https://store.epicgames.com/en-US/p/${weeklyFreeGames[i].catalogNs.mappings[0].pageSlug}`
+				game.title = weeklyFreeGames[i].title
+				game.description = weeklyFreeGames[i].description
+				game.thumbnailURL = (weeklyFreeGames[i].keyImages.find(x => x.type === 'Thumbnail')).url
+				game.seller = weeklyFreeGames[i].seller.name
+				game.originalPrice = weeklyFreeGames[i].price.totalPrice.fmtPrice.originalPrice
 				currentFreeGames.push(game)
-			}
+				game = {};
 		}
+
 		// create embeds for chat message
 		let embeds = [];
 		let currentEmbed;
@@ -46,13 +50,14 @@ let scheduledMessage = new cron.CronJob('00 5 16 * * 4', () => {
 				.setURL(currentFreeGames[game].storeURL)
 				.setTitle(`'${currentFreeGames[game].title}' by ${currentFreeGames[game].seller}`)
 				.setDescription(currentFreeGames[game].description)
-				.setImage(currentFreeGames[game].thumbnailURL);
-
+				.setImage(currentFreeGames[game].thumbnailURL)
+				.addFields({ name: 'Original price:', value: currentFreeGames[game].originalPrice })
 			embeds.push(currentEmbed);
 		}
+
 		// post message in channel
 		channel.send({
-			content: `Looks like it\'s time for more free Epic Games! Let\' see what we\'ve got in here...*rummages around*`,
+			content: announcements[Math.floor(Math.random() * announcements.length)],
 			embeds: embeds
 		})
 	})
