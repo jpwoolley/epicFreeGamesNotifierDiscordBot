@@ -16,7 +16,7 @@ client.once(Events.ClientReady, c => {
 client.login(token);
 
 // Schedule job
-let scheduledMessage = new cron.CronJob('00 * * * * *', () => {
+let scheduledMessage = new cron.CronJob('00 5 16 * * 6', () => {
 
 	const guild = client.guilds.cache.get(guildId);
 	const channel = guild.channels.cache.get(channelId);
