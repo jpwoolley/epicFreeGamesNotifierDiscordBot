@@ -1,5 +1,5 @@
 # epicFreeGamesNotifierDiscordBot
-A Discord bot which notifies your Discord server about the current free weekly games on the Epic Store.
+A Discord bot which notifies your Discord server about the current free  games on the Epic Store. Checks every day at 4:05 pm.
 
 To use this bot, you'll need to create a config.json file in the same folder as index.js with the following keys:
 * token - the bot token
